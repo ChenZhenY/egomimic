@@ -395,6 +395,7 @@ class ACT(BC_VAE):
 
     def _robomimic_to_act_data(self, batch, cam_keys, proprio_keys):
         qpos = [batch["obs"][k] for k in proprio_keys]
+        # import pdb; pdb.set_trace()
         qpos = torch.cat(qpos, axis=1)
 
         images = []
@@ -406,6 +407,7 @@ class ACT(BC_VAE):
                     image = self.color_jitter(image)
                 image = image.unsqueeze(axis=1)
                 images.append(image)
+            # import pdb; pdb.set_trace()
             images = torch.cat(images, axis=1)
         else:
             images = None

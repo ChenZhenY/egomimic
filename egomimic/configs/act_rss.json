@@ -1,7 +1,7 @@
 {
     "algo_name": "act",
     "experiment": {
-        "name": "ACT_egomimic_test2",
+        "name": "ACT_can",
         "description": "v2",
         "validate": true,
         "logging": {
@@ -39,7 +39,7 @@
         }
     },
     "train": {
-        "data": "../datasets/rss_sim_datasets/lift.hdf5",
+        "data": "../datasets/rss_sim_datasets/can.hdf5",
         "data_type": "robot",
         "data_2": null,
         "output_dir":"../trained_models_act",
@@ -55,7 +55,7 @@
         "prestacked_actions": true,
         "ac_key": "absolute_actions_with_precision_act",
         "pad_seq_length": true,
-        "frame_stack": 2,
+        "frame_stack": 1,
         "pad_frame_stack": true,
         "dataset_keys": [
             "absolute_actions_with_precision_act"

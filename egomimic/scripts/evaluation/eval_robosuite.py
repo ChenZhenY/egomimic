@@ -44,7 +44,6 @@ from egomimic.utils.egomimicUtils import (
 )
 import torchvision
 
-
 from egomimic.configs import config_factory
 from egomimic.pl_utils.pl_model import ModelWrapper
 import datetime
@@ -57,6 +56,9 @@ from egomimic.algo.act import ACT
 import pickle
 
 import robosuite
+# from robosuite import load_composite_controller_config
+import robomimic.utils.env_utils as EnvUtils
+import robomimic.utils.file_utils as FileUtils
 
 # For debugging
 # sys.excepthook = ultratb.FormattedTB(mode="Plain", color_scheme="Neutral", call_pdb=1)
@@ -68,7 +70,7 @@ CURR_EXTRINSICS = EXTRINSICS["ariaJul29R"]
 CAM_KEY = "agentview_image"
 TEMPORAL_AGG = False
 
-env_allowed = ["Lift", "Can"]
+env_allowed = ["Lift", "Stack", "NutAssembly", "NutAssemblySingle", "NutAssemblySquare", "NutAssemblyRound", "PickPlace", "PickPlaceSingle", "PickPlaceMilk", "PickPlaceBread", "PickPlaceCereal", "PickPlaceCan", "Door", "Wipe", "ToolHang", "TwoArmLift", "TwoArmPegInHole", "TwoArmHandover", "TwoArmTransport"]
 SIM_RENDER_INTERVAL = 0.05
 
 class TemporalAgg:
@@ -122,10 +124,6 @@ class TemporalAgg:
         return smoothed_action
 
 def write_video_constant_sim_time(video_writer, video_count, camera_names, env, render_interval=SIM_RENDER_INTERVAL, text=None):
-    try:
-        control_frequency = env.env.env.control_freq
-    except:
-        control_frequency = env.control_freq
 
     # sim_steps, sim_time_elapsed = env.getSimTimeInfo() # TODO: hack
     sim_time_elapsed = SIM_RENDER_INTERVAL
@@ -133,7 +131,7 @@ def write_video_constant_sim_time(video_writer, video_count, camera_names, env, 
     # setup font for annotating images:
     font = cv2.FONT_HERSHEY_SIMPLEX
 
-    if (sim_time_elapsed % render_interval < (1 / control_frequency)):
+    if (sim_time_elapsed % render_interval < (sim_time_elapsed)):
         video_img = []
         for cam_name in camera_names:
             video_img.append(
@@ -357,17 +355,57 @@ def eval_sim(model, env, rollout_dir, norm_stats, write_video=True):
     device = torch.device("cuda")
 
     obs = env.reset() # odict_keys(['robot0_joint_pos_cos', 'robot0_joint_pos_sin', 'robot0_joint_vel', 'robot0_eef_pos', 'robot0_eef_quat', 'robot0_gripper_qpos', 'robot0_gripper_qvel', 'agentview_image', 'cube_pos', 'cube_quat', 'gripper_to_cube_pos', 'robot0_proprio-state', 'object-state'])
+    # import pdb; pdb.set_trace()
 
     video_writer = None
     if write_video:
-        video_writer = imageio.get_writer("~/Videos/video_0.mp4", fps=30)
+        video_writer = imageio.get_writer("~/Videos/lift_video_2.mp4", fps=20) # TODO: change name
     video_count = 0
 
-    for i in range(400):
+    rollout_images = []
+    for i in range(30):
+
+        # Rotate images in observation by 180 degrees
+        # obs["agentview_image"] = np.rot90(obs["agentview_image"], k=2)
+        # obs["robot0_eye_in_hand_image"] = np.rot90(obs["robot0_eye_in_hand_image"], k=2)
+
+        ######## Observation preprocessing ########
+        # TODO: hack to rotate images by 180 degrees, flip around row
+        # agentview_image = obs["agentview_image"][:, ::-1, :].copy()
+        # robot0_eye_in_hand_imag = obs["robot0_eye_in_hand_image"][:, ::-1, :].copy()
+        agentview_image = np.rot90(obs["agentview_image"], k=2).copy()
+        robot0_eye_in_hand_image = np.rot90(obs["robot0_eye_in_hand_image"], k=2).copy()
+        agentview_image = np.transpose(agentview_image, (1, 2, 0)) # H W C -> W H C
+        robot0_eye_in_hand_image = np.transpose(robot0_eye_in_hand_image, (1, 2, 0))
+        # resize to 84x84 as in the dataset
+        agentview_image = cv2.resize(agentview_image, (84, 84))
+        robot0_eye_in_hand_image = cv2.resize(robot0_eye_in_hand_image, (84, 84))
+        ######### Observation preprocessing ########
+
+        rollout_images.append(agentview_image)
+        rollout_images.append(robot0_eye_in_hand_image)
+        # import pdb; pdb.set_trace()
+
+        # if obs length is 1, add batch dimension
+        robot0_eef_pos = torch.from_numpy(obs["robot0_eef_pos"]).to(torch.float32).to(device)
+        robot0_eef_quat = torch.from_numpy(obs["robot0_eef_quat"]).to(torch.float32).to(device)
+        robot0_gripper_qpos = torch.from_numpy(obs["robot0_gripper_qpos"]).to(torch.float32).to(device)
+        # import pdb; pdb.set_trace()
+        if robot0_gripper_qpos.dim() == 1:
+            robot0_gripper_qpos = robot0_gripper_qpos.unsqueeze(0)
+        if robot0_eef_pos.dim() == 1:
+            robot0_eef_pos = robot0_eef_pos.unsqueeze(0)
+        if robot0_eef_quat.dim() == 1:
+            robot0_eef_quat = robot0_eef_quat.unsqueeze(0)
+        
+        # obs needs to match the config file for training.
         data = {"obs": {
-                        "agentview_image": torch.from_numpy(obs["agentview_image"]).to(torch.uint8).to(device),  # (256, 256, 3)
-                        "pad_mask": torch.ones((1, 1, 1)).to(device).bool(),# TODO: mask should be 1xaction_lengthx1
-                        "robot0_joint_pos": torch.zeros((1, 7)).to(device), # TODO: for testing 
+                        "agentview_image": torch.from_numpy(agentview_image).to(torch.uint8).to(device),  # (256, 256, 3)
+                        "robot0_eye_in_hand_image": torch.from_numpy(robot0_eye_in_hand_image).to(torch.uint8).to(device),  # (256, 256, 3)
+                        "robot0_eef_pos": robot0_eef_pos,
+                        "robot0_eef_quat": robot0_eef_quat,
+                        "robot0_gripper_qpos": robot0_gripper_qpos,
+                        "pad_mask": torch.ones((1, 16, 1)).to(device).bool(),# TODO: mask should be 1xaction_lengthx1
                         },
                     "type": torch.tensor([0]).to(device),
                 }
@@ -377,27 +415,40 @@ def eval_sim(model, env, rollout_dir, norm_stats, write_video=True):
 
         # extend batch dimension (number of images)
         input_batch["obs"]["agentview_image"] = input_batch["obs"]["agentview_image"].unsqueeze(0).permute(0, 3, 1, 2) / 255.0
+        input_batch["obs"]["robot0_eye_in_hand_image"] = input_batch["obs"]["robot0_eye_in_hand_image"].unsqueeze(0).permute(0, 3, 1, 2) / 255.0
+        
         print(f"input_batch['obs']['agentview_image'].shape: {input_batch['obs']['agentview_image'].shape}")
         # input_batch["obs"]["agentview_image"] /= 255.0
 
-        # breakpoint()
         input_batch = ObsUtils.normalize_batch(input_batch, normalization_stats=norm_stats, normalize_actions=False)
         info = model.forward_eval(input_batch, unnorm_stats=norm_stats) # TODO: don't do normalization for delta action
 
-        actions = info["actions"].detach().cpu().numpy()
+        actions = info["absolute_actions_with_precision_act"].detach().cpu().numpy()
+        print(f"actions.shape: {actions.shape}")
 
-        single_action = actions[0,0,:]
-        print(f"actions {single_action}")
+        for i in range(actions.shape[1]):
+            action = actions[0,i,:7] # not using precision
 
-        # actions = np.random.randn(*env.action_spec[0].shape) * 0.1
-        obs, reward, done, info = env.step(single_action)  # take action in the environment
-        env.render()  # render on display
+            # actions = np.random.randn(*env.action_spec[0].shape) * 0.1
+            obs, reward, done, info = env.step(action)  # take action in the environment
+            # env.render()  # render on display
 
-        # video_count = write_video_constant_sim_time(video_writer, video_count, "agentview", env, text=None)
-        print(f"simp step {i}")
+            video_count = write_video_constant_sim_time(video_writer, video_count, ["agentview", "robot0_eye_in_hand"], env, text=None)
+        
+        print(f"inference step {i}")
 
     if video_writer:
         video_writer.close()
+
+    env.close()
+
+    # save_images(rollout_images, rollout_dir)
+
+def save_images(images, rollout_dir):
+    import PIL
+    for i, image in enumerate(images):
+        image = PIL.Image.fromarray(image)
+        image.save(os.path.join(rollout_dir, f"image_{i}.png"))
 
 def main(args):
     """
@@ -425,18 +476,63 @@ def main(args):
     if not os.path.exists(rollout_dir):
         os.mkdir(rollout_dir)
 
-    if not args.debug:
-        rollout_dir = None
+
+    # TODO: hack for controller cfg Path to config file
+    # controller_fpath = "/home/droid_robot/zhenyang/robomimic-nadun/robomimic/robosuite_configs/osc_pose_nadun.json"
+    # config = load_composite_controller_config(controller=controller_fpath)
+    # config = load_composite_controller_config(controller="BASIC")
 
     if args.env in env_allowed:
         # setup robosuite env
-        env = robosuite.make(
-            args.env,
-            robots="Panda",
-            has_renderer=True,
-            has_offscreen_renderer=True,
-            use_camera_obs=True, # TODO: for rendering testing only
+        # env = robosuite.make(
+        #     args.env,
+        #     robots="Panda",
+        #     render_camera="agentview",
+        #     has_renderer=True,
+        #     has_offscreen_renderer=True,
+        #     use_camera_obs=True, # TODO: for rendering testing only
+        #     camera_names=["agentview", "robot0_eye_in_hand"],
+        #     controller_configs=config,
+        # )
+
+        dataset_path = "/home/droid_robot/zhenyang/EgoMimic/datasets/rss_sim_datasets/lift.hdf5"
+        env_meta = FileUtils.get_env_metadata_from_dataset(dataset_path)
+        import json
+        env_meta = FileUtils.get_env_metadata_from_dataset(dataset_path)
+        # from robomimic.robosuite_configs.paths import osc_pose_nadun as osc_path
+        controller_fp = "/home/droid_robot/zhenyang/robomimic-nadun/robomimic/robosuite_configs/osc_pose_nadun.json"
+        controller_configs = json.load(open(controller_fp))
+        env_meta["env_kwargs"]["controller_configs"] = controller_configs
+        # env_meta["env_kwargs"]["control_freq"] = freq
+        # env_meta['env_kwargs']['controller_configs']['torque_scale'] = 200.0
+
+
+        import h5py                                     
+        demo_file = h5py.File(dataset_path, 'r')
+        demo = demo_file['data/demo_0']
+
+        obs = demo['obs']
+        obs_modality_spec = {"obs": {
+            "low_dim": [],
+            "rgb": []
+        }
+        }
+        for obs_key in obs:
+            if "image" in obs_key:
+                obs_modality_spec["obs"]["rgb"].append(obs_key)
+            else:
+                obs_modality_spec["obs"]["low_dim"].append(obs_key)
+
+        ObsUtils.initialize_obs_utils_with_obs_specs(obs_modality_spec)
+
+        env = EnvUtils.create_env_from_metadata(
+            env_meta=env_meta,
+            env_name="Lift", # TODO: change 
+            render=False, 
+            render_offscreen=False,
+            use_image_obs=True, 
         )
+
     else:
         raise ValueError(f"Environment {args.env} not supported")
 
@@ -479,3 +575,4 @@ if __name__ == "__main__":
     #     time_str = f"{args.description}_DT_{datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d-%H-%M-%S')}"
     #     args.description = time_str
     main(args)
+
