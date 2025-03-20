@@ -163,7 +163,7 @@ class ModelWrapper(LightningModule):
         val_freq = self.model.global_config.experiment.validation_freq
         video_freq = self.model.global_config.experiment.save.video_freq
 
-        # TODO: remove this eval
+        # TODO: add back this eval
         # if self.current_epoch % val_freq == 0 and self.current_epoch != 0:
         #     if self.global_rank == 0:
         #         # Perform custom validation
@@ -205,6 +205,7 @@ class ModelWrapper(LightningModule):
         process = psutil.Process(os.getpid())
         mem_usage = process.memory_info().rss / int(1e9)
         print("\nEpoch {} Memory Usage: {} GB\n".format(self.current_epoch, mem_usage))
+        print(f"All log_all: {log_all}")
         # self.log('epoch', self.trainer.current_epoch)
         self.log("System/RAM Usage (GB)", mem_usage, sync_dist=True)
 

@@ -135,7 +135,6 @@ def eval_real(model, env, rollout_dir, norm_stats, arm="right"):
 
     query_frequency = 25
 
-
     # max_timesteps = int(max_timesteps * 1)  # may increase for real-world tasks
     qpos_t, actions_t = [], []
     num_rollouts = 50

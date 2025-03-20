@@ -382,7 +382,7 @@ def eval_sim(model, env, rollout_dir, norm_stats, write_video=True):
 
         # breakpoint()
         input_batch = ObsUtils.normalize_batch(input_batch, normalization_stats=norm_stats, normalize_actions=False)
-        info = model.forward_eval(input_batch, unnorm_stats=norm_stats)
+        info = model.forward_eval(input_batch, unnorm_stats=norm_stats) # TODO: don't do normalization for delta action
 
         actions = info["actions"].detach().cpu().numpy()
 
