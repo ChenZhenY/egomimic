@@ -467,6 +467,8 @@ class ACT(BC_VAE):
         qpos, images, env_state, _, is_pad = self._robomimic_to_act_data(
             batch, self.camera_keys, self.proprio_keys
         )
+
+        # import pdb; pdb.set_trace()
         a_hat, is_pad_hat, (mu, logvar) = self.nets["policy"](
             qpos=qpos, image=images, env_state=env_state, actions=None, is_pad=is_pad
         )

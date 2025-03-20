@@ -60,7 +60,7 @@ def draw_both_actions_on_frame(im, type, color, actions, arm="both"):
             left_actions_drawable = ee_pose_to_cam_frame(left_actions, EXTRINSICS_LEFT)
             actions_drawable = left_actions_drawable
     else:
-        actions = actions.reshape(-1, 3)
+        actions = actions[..., :3].reshape(-1, 3)
         actions_drawable = actions
     
     actions_drawable = cam_frame_to_cam_pixels(actions_drawable, INTRINSICS)
@@ -113,7 +113,7 @@ def evaluate_high_level_policy(
 
     front_cam_name = None
     for cam_name in model.global_config.observation.modalities.obs.rgb:
-        if "front_img" in cam_name:
+        if "front_img" in cam_name or "agentview_image" in cam_name:
             front_cam_name = cam_name
     if front_cam_name is None:
         raise ValueError("Front camera not found in observation modalities.  Val utils expects that the main front camera key contains 'front_img'")
@@ -143,8 +143,8 @@ def evaluate_high_level_policy(
             ).astype(np.uint8)
             if isinstance(model, EgoMimic) or isinstance(model, ACT):
                 if type == "robot":
-                    actions = input_batch["actions_joints_act"][b].cpu().numpy()
-                    pred_values = info["actions_joints_act"][b].cpu().numpy()
+                    actions = input_batch["actions"][b].cpu().numpy() # TODO: original is actions_joints_act
+                    pred_values = info["actions"][b].cpu().numpy()
                 elif type == "hand":
                     actions = input_batch["actions_xyz_act"][b].cpu().numpy()
                     pred_values = info["actions_xyz_act"][b].cpu().numpy()

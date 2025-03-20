@@ -7,6 +7,7 @@ egomimic.egg-info/
 egomimic/debug
 trained_models_highlevel/
 trained_models_lowlevel/
+trained_models_act/
 egomimic/scripts/exps
 *.ipynb_checkpoints
 *.mp4
@@ -22,3 +23,4 @@ egomimic/v_3.png
 egomimic/scripts/masking/overlays/
 debug_ims/*
 egomimic/scripts/aloha_process/datasetFig
+datasets/

@@ -163,42 +163,43 @@ class ModelWrapper(LightningModule):
         val_freq = self.model.global_config.experiment.validation_freq
         video_freq = self.model.global_config.experiment.save.video_freq
 
-        if self.current_epoch % val_freq == 0 and self.current_epoch != 0:
-            if self.global_rank == 0:
-                # Perform custom validation
+        # TODO: remove this eval
+        # if self.current_epoch % val_freq == 0 and self.current_epoch != 0:
+        #     if self.global_rank == 0:
+        #         # Perform custom validation
 
-                with torch.no_grad():
-                    self.eval()
-                    self.zero_grad()
-                    pass_vid = (
-                        os.path.join(self.trainer.default_root_dir, "videos")
-                        if self.current_epoch % video_freq == 0
-                        else None
-                    )
-                    valid_step_log = ValUtils.evaluate_high_level_policy(
-                        self.model,
-                        self.datamodule.val_dataloader_1(),
-                        pass_vid,
-                        max_samples=self.model.global_config.experiment.validation_max_samples,
-                        ac_key=self.model.global_config.train.ac_key,
-                        type="robot",
-                    )  # save vid only once every video_freq epochs
+        #         with torch.no_grad():
+        #             self.eval()
+        #             self.zero_grad()
+        #             pass_vid = (
+        #                 os.path.join(self.trainer.default_root_dir, "videos")
+        #                 if self.current_epoch % video_freq == 0
+        #                 else None
+        #             )
+        #             valid_step_log = ValUtils.evaluate_high_level_policy(
+        #                 self.model,
+        #                 self.datamodule.val_dataloader_1(),
+        #                 pass_vid,
+        #                 max_samples=self.model.global_config.experiment.validation_max_samples,
+        #                 ac_key=self.model.global_config.train.ac_key,
+        #                 type="robot",
+        #             )  # save vid only once every video_freq epochs
 
-                    if self.dual_dl:
-                        valid_step_log_2 = ValUtils.evaluate_high_level_policy(
-                            self.model,
-                            self.datamodule.val_dataloader_2(),
-                            pass_vid,
-                            max_samples=self.model.global_config.experiment.validation_max_samples,
-                            ac_key=self.model.global_config.train.ac_key_hand,
-                            type="hand",
-                        )  # save vid only once every video_freq epochs
-                    self.train()
-                for k, v in valid_step_log.items():
-                    self.log("Valid/" + k, v, sync_dist=False)
-                if self.dual_dl:
-                    for k, v in valid_step_log_2.items():
-                        self.log("Valid/" + k, v, sync_dist=False)
+        #             if self.dual_dl:
+        #                 valid_step_log_2 = ValUtils.evaluate_high_level_policy(
+        #                     self.model,
+        #                     self.datamodule.val_dataloader_2(),
+        #                     pass_vid,
+        #                     max_samples=self.model.global_config.experiment.validation_max_samples,
+        #                     ac_key=self.model.global_config.train.ac_key_hand,
+        #                     type="hand",
+        #                 )  # save vid only once every video_freq epochs
+        #             self.train()
+        #         for k, v in valid_step_log.items():
+        #             self.log("Valid/" + k, v, sync_dist=False)
+        #         if self.dual_dl:
+        #             for k, v in valid_step_log_2.items():
+        #                 self.log("Valid/" + k, v, sync_dist=False)
 
         # Finally, log memory usage in MB
         process = psutil.Process(os.getpid())
